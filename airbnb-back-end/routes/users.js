@@ -31,14 +31,14 @@ router.post('/signup',(req, res, next)=>{
       });
     }else{
       // this email has not been used. lets add it
-      const insertUserQuery = ` INSERT INTO users
+      const insertUserQuery = `INSERT INTO users
         (first, last, email, password, token)
         VALUES
         (?,?,?,?,?)`
         // turn the password into something evil for db storage
         const salt = bcrypt.genSaltSync(10);
         const hash = bcrypt.hashSync(password, salt);
-        const token = randToken.uid(50);
+        const token = randToken.uid(50); // this is the users valet ticket
         db.query(insertUserQuery,[first,last,email,hash,token],(err2)=>{
           if(err2){throw err2}
           // Hooray!
@@ -49,6 +49,49 @@ router.post('/signup',(req, res, next)=>{
             first
           })
         });
+    }
+  })
+})
+
+router.post('/login',(req, res)=>{
+  const { email, password } = req.body;
+  // First: Check db for this email
+  const getUserQuery = `SELECT * FROM users WHERE email = ?`;
+  db.query(getUserQuery,[email],(err, results)=>{
+    if(err){throw err}
+    // check to see if there is a result
+    if(results.length > 0){
+      // found them!!!!
+      const thisRow = results[0];
+      // find out if the pass is correct
+      const isValidPass = bcrypt.compareSync(password,thisRow.password);
+      if(isValidPass){
+        // these are the droids we're looking for
+        const token = randToken.uid(50); // this is the users valet ticket
+        const updateUserTokenQuery = `UPDATE users
+          SET token = ? WHERE email = ?`
+        db.query(updateUserTokenQuery,[token,email],(err)=>{
+          if(err){throw err}
+        });
+
+        res.json({
+          msg: "loggedIn",
+          first: thisRow.first,
+          email: thisRow.email,
+          token
+        });
+      }else{
+        // lier lier, pants on fire
+        res.json({
+          msg: "badPass"
+        })
+      }
+
+    }else{
+      // no match
+      res.json({
+        msg: "noEmail"
+      })
     }
   })
 })
